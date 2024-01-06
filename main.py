@@ -10,30 +10,30 @@ import requests
 
 from bs4 import BeautifulSoup
 
-class Dict_Scraper:
+
+class DictScraper:
     def __init__(self, language):
         self.language = language
-        self.logger = Dict_Scraper.set_logger(f"{self.language}_dict")
-        self.func_dict = {"ilocano":self.preprocess_ilocano, 
-                          "tagalog":self.preprocess_tagalog,
-                          "cebuano":self.preprocess_cebuano,
-                          "hiligaynon":self.preprocess_hiligaynon}
+        self.logger = DictScraper.set_logger(f"{self.language}_dict")
+        self.func_dict = {"ilocano": self.preprocess_ilocano,
+                          "tagalog": self.preprocess_tagalog,
+                          "cebuano": self.preprocess_cebuano,
+                          "hiligaynon": self.preprocess_hiligaynon}
 
     def __str__(self):
         return f"{self.language} Dictionary Scraper"
-    
 
     def send_request(self, link, **kwargs):
         for i in range(3):
             try:
-                self.logger.info('Attempt number %s of %s', i+1, 3)
+                self.logger.info('Attempt number %s of %s', i + 1, 3)
                 r = requests.get(link, **kwargs, timeout=30)
                 break
             except requests.exceptions.ConnectTimeout as err:
                 self.logger.debug('Connection Timemout Error: %s', err)
-                time.sleep(np.random.choice([x/10 for x in range(7,22)]))
+                time.sleep(np.random.choice([x / 10 for x in range(7, 22)]))
                 continue
-            except requests.exceptions.RequestException:
+            except requests.exceptions.RequestException as err:
                 self.logger.debug('Connection Failed Error: %s', err)
                 sys.exit()
         else:
@@ -41,27 +41,38 @@ class Dict_Scraper:
             sys.exit()
         return r
 
-
     def preprocess_ilocano(self, definition):
-        pattern = re.compile(r'^(.*\.)\s*(.*)')
-        if match := re.search(pattern, definition):
-            speech_part = match.group(1)
-            meaning = match.group(2)
+        pattern = re.compile(r'(\b(?:n|art|v|adj|adv|prep|conj|pron|inter|prefix)\.)')
+        if match := re.findall(pattern, definition):
+            speech_part = ', '.join(match)
+            meaning = definition
         else:
             speech_part = None
             meaning = definition
         return speech_part, meaning
 
     def preprocess_tagalog(self, definition):
+        pattern = re.compile(r'(\b(?:n|art|v|adj|adv|prep|conj|pron|inter|prefix|inf|intrj|comp|interrog|idiom)\.)')
+        if match := re.findall(pattern, definition):
+            speech_part = ', '.join(match)
+            meaning = definition
+        else:
+            speech_part = None
+            meaning = definition
+        return speech_part, meaning
+
+    def preprocess_hiligaynon(self, definition):
+        # Hiligaynon dictionary contains duplicated entries. This script scrapes the dictionary as is
+        # so the .csv file will also contain duplicated entries,
         speech_part = None
         return speech_part, definition
 
-    def preprocess_hiligaynon(self, definition):
-        speech_part = None
-        return speech_part, definition
-    
     def preprocess_cebuano(self, definition):
-        speech_part = None
+        pattern = re.compile(r'(\b(?:n|a|v|adj|adv|prep|conj|pron|inter|prefix)\.|\[.*])')
+        if match := re.findall(pattern, definition):
+            speech_part = ', '.join(set(match))
+        else:
+            speech_part = None
         return speech_part, definition
 
     def parse_response(self, letter):
@@ -86,7 +97,6 @@ class Dict_Scraper:
                 except AttributeError:
                     break
         return terms_list
-    
 
     def save_data(self, terms_list):
         filename = f'./scraped_data/{self.language}.csv'
@@ -99,7 +109,7 @@ class Dict_Scraper:
     def main(self):
         alphabet = list(map(chr, range(97, 123)))
         terms_list = []
-        # alphabet = ('a', 'b')
+        # alphabet = ('a')
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             results = executor.map(self.parse_response, alphabet)
@@ -110,12 +120,12 @@ class Dict_Scraper:
         self.logger.info('Wrote %s number of words', len(terms_list))
         self.save_data(terms_list)
 
-
     @classmethod
     def initialize(cls):
         language = input('Language: ')
+        # language = 'ilocano'
         return cls(language)
-    
+
     @classmethod
     def set_logger(cls, filename):
         logger = logging.getLogger(__name__)
@@ -126,14 +136,13 @@ class Dict_Scraper:
         logger.addHandler(handler)
         return logger
 
+
 if __name__ == '__main__':
     start = time.perf_counter()
 
-    app=Dict_Scraper.initialize()
+    app = DictScraper.initialize()
     app.main()
 
     finish = time.perf_counter()
 
-    app.logger.info('Finished in %s second(s)', {round(finish-start,2)})
-
-    
+    app.logger.info('Finished in %s second(s)', {round(finish - start, 2)})
